@@ -22,10 +22,10 @@ SOFTWARE.
 
 # License of textures
 
-CC-BY-SA 4.0 Atomic Shrimp(?)
+CC BY-SA 4.0 Atomic Shrimp(?)
 
 https://atomicshrimp.com/post/2020/01/10/Play-PRANG%21
 
 # License of music
 
-CC-BY-SA Ozzed https://ozzed.net/music/friendship-adventure.shtml
+CC BY-SA 3.0 Ozzed https://ozzed.net/music/dunes-at-night.shtml
