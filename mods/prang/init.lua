@@ -993,14 +993,14 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
     if not zoom_levels[pname] then return end
 
     if not running_games[pname].title_screen then
-        -- In-game
+        -- In-game and the game over screen
         if fields.exit then
             running_games[pname]:shutdown()
             running_games[pname] = TitleScreen(player)
         end
         return
     elseif not running_games[pname].running then
-        -- In instructions/credits/game over screen
+        -- In the instructions/credits pages
         if fields.exit or fields.quit then
             player:set_inventory_formspec(TITLE_FS)
             if fields.quit then
@@ -1045,5 +1045,8 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
             "prang_credits_bg.jpg")
     elseif fields.exit then
         minetest.kick_player(pname, "Thank you for playing PRANG!")
+    elseif fields.quit then
+        minetest.after(0.1, minetest.show_formspec, pname, "prang:fs",
+            TITLE_FS)
     end
 end)
