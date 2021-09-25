@@ -3,11 +3,15 @@
 [![ContentDB](https://content.minetest.net/packages/luk3yx/prang/shields/downloads/)](https://content.minetest.net/packages/luk3yx/prang/)
 
 An unofficial port of
-[PRANG!](https://atomicshrimp.com/post/2020/01/10/Play-PRANG!) to Minetest.
+[PRANG!](https://atomicshrimp.com/post/2020/01/10/Play-PRANG!), a 2D
+arcade-style game, to Minetest.
 
 ![Screenshot](https://content.minetest.net/uploads/15b90a793d.png)
 
-There are instructions on how to play inside the game.
+There are instructions on how to play inside the game. In short, you have to
+collect food/potions and avoid enemies. You can get a powerup (umbrella) to be
+able to destroy enemies, however obstacles are deadly while you have the
+powerup.
 
 Requires 5.4.0+ servers, however it should work with clients down to 5.0.0
 (although it will send more HUD updates to clients older than 5.2.0).
