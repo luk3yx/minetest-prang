@@ -997,6 +997,10 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
         if fields.exit then
             running_games[pname]:shutdown()
             running_games[pname] = TitleScreen(player)
+        elseif fields.quit and not running_games[pname].running then
+            -- Pressed Esc in the game over screen
+            minetest.after(0.1, minetest.show_formspec, pname, "prang:fs",
+                player:get_inventory_formspec())
         end
         return
     elseif not running_games[pname].running then
