@@ -20,7 +20,7 @@ if minetest.global_exists("modlib") and (modlib.version or 0) >= 54 then
     local pcall, from_string = pcall, modlib.minetest.colorspec.from_string
     function colorstring_to_number(col)
         local ok, spec = pcall(from_string, col)
-        if not ok then return end
+        if not ok or not spec then return end
         return spec:to_number_rgb()
     end
 else
@@ -43,6 +43,9 @@ local function get_label_number(label)
 end
 
 -- Disable the race condition workaround in 5.4.1 singleplayer
+-- The bug was fixed in 5.4.1 but there's no (easy) way to detect 5.4.1 clients
+-- The workaround is disabled for 5.5.0+ clients (if the server is 5.5.0+)
+-- regardless of this setting.
 local enable_race_condition_workaround = true
 if minetest.is_singleplayer() then
     local version = minetest.get_version()
