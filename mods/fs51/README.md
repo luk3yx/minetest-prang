@@ -1,7 +1,7 @@
 # FS51
 
-A compatibility layer that makes formspec_version 3 (and later) formspecs
-render more correctly in Minetest 5.1.0 and earlier.
+A compatibility layer that makes formspec_version 4 (and later) formspecs
+render more correctly in Minetest 5.3.0 and earlier.
 
 This will work with most mods without any additional configuration. If you want
 to disable automatic formspec translation, add

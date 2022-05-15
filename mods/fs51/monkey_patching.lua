@@ -33,10 +33,36 @@ local function remove_hypertext(text)
     return res
 end
 
+-- Backport index_event by modifying the dropdown items so that they all start
+-- with \x1b(fs51@idx_<N>). This is then parsed out here if the player has been
+-- shown any formspec with a dropdown that has index_event. The extra check is
+-- done to prevent trying to parse every single field for every single player.
+local dropdown_hack_enabled = {}
+minetest.after(0, minetest.register_on_player_receive_fields,
+        function(player, _, fields)
+    if dropdown_hack_enabled[player:get_player_name()] then
+        local to_update = {}
+        for field, raw_value in pairs(fields) do
+            if field:sub(1, 6) == "\1fs51\1" then
+                to_update[field] = raw_value:match("^\27%(fs51@idx_([0-9]+)%)")
+            end
+        end
+
+        for field, value in pairs(to_update) do
+            fields[field] = nil
+            fields[field:sub(7)] = value
+        end
+    end
+end)
+
+minetest.register_on_leaveplayer(function(player)
+    dropdown_hack_enabled[player:get_player_name()] = nil
+end)
+
 local function backport_for(name, formspec)
     local info = get_player_information(name)
     local formspec_version = info and info.formspec_version or 1
-    if formspec_version >= 3 then return formspec end
+    if formspec_version >= 4 then return formspec end
 
     local tree, err = formspec_ast.parse(formspec)
     if not tree then
@@ -49,7 +75,19 @@ local function backport_for(name, formspec)
     local modified
     for node in formspec_ast.walk(tree) do
         local node_type = node.type
-        if formspec_version == 1 and node_type == 'background9' then
+        if node_type == "dropdown" and node.index_event and node.items then
+            -- Enable the dropdown hack for this player
+            dropdown_hack_enabled[name] = true
+
+            modified = true
+            node.name = "\1fs51\1" .. node.name
+            for i, item in ipairs(node.items) do
+                node.items[i] = "\27(fs51@idx_" .. i .. ")" .. item
+            end
+            node.index_event = nil
+        elseif formspec_version == 3 then  -- luacheck: ignore 542
+            -- Don't do anything else
+        elseif formspec_version == 1 and node_type == 'background9' then
             -- No need to set modified here
             node.type = 'background'
             node.middle_x, node.middle_y = nil, nil

@@ -29,65 +29,77 @@
 
 local formspec_ast, minetest = formspec_ast, formspec_ast.minetest
 
+local BACKSLASH, SEMICOLON, COMMA, RBRACKET = ('\\;,]'):byte(1, 4)
+
 -- Parse a formspec into a "raw" non-AST state.
 -- Input: size[5,2]button[0,0;5,1;name;Label] image[0,1;1,1;air.png]
--- Output: {{'size', '5', '2'}, {'button', '0,0', '5,1', 'name', 'label'},
---             {'image', '0,1', '1,1', 'air.png'}}
+-- Output:
+-- {
+--     {type='size', '5', '2'},
+--     {type='button', {'0', '0'}, {'5', '1'}, 'name', 'label'},
+--     {type='image', {'0', '1'}, {'1', '1'}, 'air.png'},
+-- }
+local table_concat = table.concat
 local function raw_parse(spec)
     local res = {}
-    while spec do
-        -- Get the first element
-        local name
-        name, spec = spec:match('([%w_%-:]*[^%s\\])%s*(%[.*)')
-        if not name or not spec then return res end
-        local elem = {}
-        elem[1] = name
+    local end_idx = 0
+    local bracket_idx
+    local spec_length = #spec
 
-        -- Get the parameters
-        local s, e = spec:find('[^\\]%]')
-        local rawargs
-        if s and e then
-            rawargs, spec = spec:sub(2, s), spec:sub(e + 1)
-        else
-            rawargs, spec = spec:sub(2), false
-        end
+    while end_idx < spec_length do
+        -- Get the element type
+        bracket_idx = spec:find('[', end_idx + 1, true)
+        if not bracket_idx then break end
+        local parts = {type = spec:sub(end_idx + 1, bracket_idx - 1):trim()}
 
         -- Split everything
-        -- TODO: Make this a RegEx
-        local i = ''
+        -- This tries and avoids creating small strings where possible
+        end_idx = spec_length + 1
+        local part = {}
         local esc = false
         local inner = {}
-        for c = 1, #rawargs do
-            local char = rawargs:sub(c, c)
+        local start_idx = bracket_idx + 1
+        for idx = bracket_idx, spec_length do
+            local byte = spec:byte(idx)
             if esc then
+                -- The current character is escaped
                 esc = false
-                i = i .. char
-            elseif char == '\\' then
-                    esc = true
-            elseif char == ';' then
+            elseif byte == BACKSLASH then
+                part[#part + 1] = spec:sub(start_idx, idx - 1)
+                start_idx = idx + 1
+                esc = true
+            elseif byte == SEMICOLON then
+                part[#part + 1] = spec:sub(start_idx, idx - 1)
+                start_idx = idx + 1
                 if #inner > 0 then
-                    table.insert(inner, i)
-                    table.insert(elem, inner)
+                    inner[#inner + 1] = table_concat(part)
+                    parts[#parts + 1] = inner
                     inner = {}
                 else
-                    table.insert(elem, i)
+                    parts[#parts + 1] = table_concat(part)
                 end
-                i = ''
-            elseif char == ',' then
-                table.insert(inner, i)
-                i = ''
-            else
-                i = i .. char
+                part = {}
+            elseif byte == COMMA then
+                part[#part + 1] = spec:sub(start_idx, idx - 1)
+                start_idx = idx + 1
+                inner[#inner + 1] = table_concat(part)
+                part = {}
+            elseif byte == RBRACKET then
+                end_idx = idx
+                break
             end
         end
+
+        -- Add the last part
+        part[#part + 1] = spec:sub(start_idx, end_idx - 1)
         if #inner > 0 then
-            table.insert(inner, i)
-            table.insert(elem, inner)
+            inner[#inner + 1] = table_concat(part)
+            parts[#parts + 1] = inner
         else
-            table.insert(elem, i)
+            parts[#parts + 1] = table_concat(part)
         end
 
-        table.insert(res, elem)
+        res[#res + 1] = parts
     end
 
     return res
@@ -96,22 +108,24 @@ end
 -- Unparse raw formspecs
 -- WARNING: This will modify the table passed to it.
 local function raw_unparse(data)
-    local res = ''
-    for _, elem in ipairs(data) do
-        for i = 2, #elem do
-            if type(elem[i]) == 'table' then
-                for j, e in ipairs(elem[i]) do
-                    elem[i][j] = minetest.formspec_escape(e)
+    local res = {}
+    for _, parts in ipairs(data) do
+        res[#res + 1] = parts.type
+        for i = 1, #parts do
+            if type(parts[i]) == 'table' then
+                for j, e in ipairs(parts[i]) do
+                    parts[i][j] = minetest.formspec_escape(e)
                 end
-                elem[i] = table.concat(elem[i], ',')
+                parts[i] = table_concat(parts[i], ',')
             else
-                elem[i] = minetest.formspec_escape(elem[i])
+                parts[i] = minetest.formspec_escape(parts[i])
             end
         end
-        res = res .. table.remove(elem, 1) .. '[' ..
-            table.concat(elem, ';') .. ']'
+        res[#res + 1] = '['
+        res[#res + 1] = table_concat(parts, ';')
+        res[#res + 1] = ']'
     end
-    return res
+    return table_concat(res)
 end
 
 -- Elements
@@ -121,7 +135,6 @@ local elements = assert(loadfile(formspec_ast.modpath .. '/elements.lua'))()
 -- Parsing
 local types = {}
 
-function types.null() end
 function types.undefined()
     error('Unknown element type!')
 end
@@ -150,6 +163,7 @@ function types.fullscreen(param)
 end
 
 function types.table(obj)
+    if obj == '' then return end
     local s, e = obj:find('=', nil, true)
     assert(s, 'Invalid syntax: "' .. obj .. '".')
     return {[obj:sub(1, s - 1)] = obj:sub(e + 1)}
@@ -186,7 +200,7 @@ local function parse_value(elems, template)
             local func = types[obj[2]] or types.undefined
             local elem = elems[i]
             if type(elem) == 'table' then
-                elem = table.concat(elem, ',')
+                elem = table_concat(elem, ',')
             end
             res[obj[1]] = func(elem, obj[1])
         else
@@ -221,10 +235,12 @@ types['...'] = function(elems, obj, res)
     if obj[2] == 'table' then
         local t = {}
         for _, n in ipairs(val) do
-            local k, v = next(n)
-            t[k] = v
+            if n then
+                local k, v = next(n)
+                t[k] = v
+            end
         end
-        res[obj[1] .. 's'] = t
+        res[obj[1]] = t
     elseif type(obj[2]) == 'string' then
         res[obj[1]] = val
     else
@@ -235,7 +251,6 @@ end
 
 local parse_mt
 local function parse_elem(elem, custom_handlers)
-    elem.type = table.remove(elem, 1)
     local data = elements[elem.type]
     if not data then
         if not custom_handlers or not custom_handlers[elem.type] then
@@ -250,7 +265,6 @@ local function parse_elem(elem, custom_handlers)
         if good then
             return ast_elem, true
         else
-            table.insert(elem, 1, elem.type)
             return nil, 'Invalid element "' .. raw_unparse({elem}) .. '": ' ..
                 tostring(ast_elem)
         end
@@ -272,7 +286,6 @@ local function parse_elem(elem, custom_handlers)
         end
     end
 
-    table.insert(elem, 1, elem.type)
     return nil, 'Invalid element "' .. raw_unparse({elem}) .. '": ' ..
         tostring(ast_elem)
 end
@@ -316,8 +329,8 @@ end
 -- }
 
 
-function formspec_ast.parse(spec, custom_handlers)
-    spec = raw_parse(spec)
+function formspec_ast.parse(fs, custom_handlers)
+    local spec = raw_parse(fs)
     local res = {formspec_version=1}
     local containers = {}
     local container = res
@@ -348,16 +361,21 @@ function formspec_ast.parse(spec, custom_handlers)
 end
 
 -- Unparsing
+local compat_keys = {listelems = "listelem", items = "item",
+    captions = "caption"}
 local function unparse_ellipsis(elem, obj1, res, inner)
     if obj1[2] == 'table' then
-        local value = elem[obj1[1] .. 's']
+        local value = elem[obj1[1]]
         assert(type(value) == 'table', 'Invalid AST!')
         for k, v in pairs(value) do
             table.insert(res, tostring(k) .. '=' .. tostring(v))
         end
     elseif type(obj1[2]) == 'string' then
         local value = elem[obj1[1]]
-        if value == nil then return end
+        if value == nil then
+            value = elem[compat_keys[obj1[1]]]
+            if value == nil then return end
+        end
         for _, v in ipairs(value) do
             table.insert(res, tostring(v))
         end
@@ -461,7 +479,7 @@ local function unparse_elem(elem, res, force)
             good, raw_elem = pcall(unparse_value, elem, template)
         end
         if good then
-            table.insert(raw_elem, 1, elem.type)
+            raw_elem.type = elem.type
             table.insert(possible_elems, raw_elem)
         end
     end
@@ -506,7 +524,10 @@ end
 function formspec_ast.unparse(tree)
     local raw_spec = {}
     if tree.formspec_version and tree.formspec_version ~= 1 then
-        raw_spec[1] = {'formspec_version', tostring(tree.formspec_version)}
+        raw_spec[1] = {
+            type = 'formspec_version',
+            tostring(tree.formspec_version)
+        }
     end
 
     for _, elem in ipairs(tree) do
@@ -534,7 +555,7 @@ function parse_mt:__index(key)
     if func then
         return function(obj)
             if type(obj) == 'table' then
-                obj = table.concat(obj, ',')
+                obj = table_concat(obj, ',')
             end
             return func(obj or '')
         end
@@ -551,6 +572,7 @@ end
 -- The function should return either a single AST node or a list of multiple
 -- nodes.
 -- Multiple functions can be registered for one element.
+-- This API should not be used outside of formspec_ast.
 function formspec_ast.register_element(name, parse_func)
     assert(type(name) == 'string' and type(parse_func) == 'function')
     if not elements[name] then

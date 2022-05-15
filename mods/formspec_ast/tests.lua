@@ -64,11 +64,23 @@ local function test_parse_unparse(fs, expected_tree)
     assert_equal(fs, unparsed_fs)
 end
 
+test_parse_unparse([=[label[123,456;yay abc def\, ghi\; jkl mno \]\\]]=], {
+    formspec_version = 1,
+    {
+        type = 'label',
+        x = 123,
+        y = 456,
+        label = 'yay abc def, ghi; jkl mno ]\\'
+    }
+})
+
 local fs = [[
     formspec_version[2]
     size[5,2]
+    padding[1,2]
+    no_prepend[]
     container[1,1]
-        label[0,0;Containers are fun]
+        label[0,0;Containers are fun\]\\]
         container[-1,-1]
             button[0.5,0;4,1;name;Label]
         container_end[]
@@ -90,6 +102,15 @@ local fs = [[
     background9[1,2;3,4;bg.png;false;5]
     background9[1,2;3,4;bg.png;false;5,6]
     background9[1,2;3,4;bg.png;false;5,6,7,8]
+    tablecolumns[text;image;color,option=value;tree]
+    list[test;test2;1,2;3,4;5]
+    list[test6;test7;8,9;10,11]
+    image_button[1,2;3,4;img.png;name;label]
+    image_button[1,2;3,4;img.png;name;label;false;true]
+    image_button[1,2;3,4;img.png;name;label;true;false;img2.png]
+    image_button_exit[1,2;3,4;img.png;name;label]
+    image_button_exit[1,2;3,4;img.png;name;label;false;true]
+    image_button_exit[1,2;3,4;img.png;name;label;true;false;img2.png]
 ]]
 fs = ('\n' .. fs):gsub('\n[ \n]*', '')
 
@@ -101,6 +122,14 @@ test_parse_unparse(fs, {
         h = 2,
     },
     {
+        type = "padding",
+        x = 1,
+        y = 2,
+    },
+    {
+        type = "no_prepend"
+    },
+    {
         type = "container",
         x = 1,
         y = 1,
@@ -108,7 +137,7 @@ test_parse_unparse(fs, {
             type = "label",
             x = 0,
             y = 0,
-            label = "Containers are fun",
+            label = "Containers are fun]\\",
         },
         {
             type = "container",
@@ -169,7 +198,7 @@ test_parse_unparse(fs, {
         y = 0,
         w = 1,
         name = "test",
-        item = {"abc", "def", "ghi", "jkl"},
+        items = {"abc", "def", "ghi", "jkl"},
         selected_idx = 2,
     },
     {
@@ -178,7 +207,7 @@ test_parse_unparse(fs, {
         y = 0,
         w = 1,
         name = "test",
-        item = {"abc", "def", "ghi", "jkl"},
+        items = {"abc", "def", "ghi", "jkl"},
         selected_idx = 2,
         index_event = true,
     },
@@ -250,6 +279,104 @@ test_parse_unparse(fs, {
         middle_x2 = 7,
         middle_y2 = 8,
     },
+    {
+        type = "tablecolumns",
+        tablecolumns = {
+            {type = "text", opts = {}},
+            {type = "image", opts = {}},
+            {type = "color", opts = {option = "value"}},
+            {type = "tree", opts = {}},
+        },
+    },
+    {
+        type = "list",
+        inventory_location = "test",
+        list_name = "test2",
+        x = 1,
+        y = 2,
+        w = 3,
+        h = 4,
+        starting_item_index = 5,
+    },
+    {
+        type = "list",
+        inventory_location = "test6",
+        list_name = "test7",
+        x = 8,
+        y = 9,
+        w = 10,
+        h = 11,
+    },
+    {
+        type = "image_button",
+        x = 1,
+        y = 2,
+        w = 3,
+        h = 4,
+        texture_name = "img.png",
+        name = "name",
+        label = "label",
+    },
+    {
+        type = "image_button",
+        x = 1,
+        y = 2,
+        w = 3,
+        h = 4,
+        texture_name = "img.png",
+        name = "name",
+        label = "label",
+        noclip = false,
+        drawborder = true,
+    },
+    {
+        type = "image_button",
+        x = 1,
+        y = 2,
+        w = 3,
+        h = 4,
+        texture_name = "img.png",
+        name = "name",
+        label = "label",
+        noclip = true,
+        drawborder = false,
+        pressed_texture_name = "img2.png",
+    },
+    {
+        type = "image_button_exit",
+        x = 1,
+        y = 2,
+        w = 3,
+        h = 4,
+        texture_name = "img.png",
+        name = "name",
+        label = "label",
+    },
+    {
+        type = "image_button_exit",
+        x = 1,
+        y = 2,
+        w = 3,
+        h = 4,
+        texture_name = "img.png",
+        name = "name",
+        label = "label",
+        noclip = false,
+        drawborder = true,
+    },
+    {
+        type = "image_button_exit",
+        x = 1,
+        y = 2,
+        w = 3,
+        h = 4,
+        texture_name = "img.png",
+        name = "name",
+        label = "label",
+        noclip = true,
+        drawborder = false,
+        pressed_texture_name = "img2.png",
+    },
 })
 
 local function remove_trailing_params(elem_s, elem, ...)
@@ -320,6 +447,37 @@ test_parse('style[name,name2;bgcolor=blue;textcolor=yellow]', {
     },
 })
 
+-- Test item/items compatibility
+assert_equal(
+    'dropdown[0,0;1,2;test;abc,def,ghi,jkl;2;true]',
+    assert(formspec_ast.unparse({
+        {
+            type = "dropdown",
+            x = 0,
+            y = 0,
+            w = 1,
+            h = 2,
+            name = "test",
+            items = {"abc", "def", "ghi", "jkl"},
+            selected_idx = 2,
+            index_event = true,
+        },
+    })),
+    assert(formspec_ast.unparse({
+        {
+            type = "dropdown",
+            x = 0,
+            y = 0,
+            w = 1,
+            h = 2,
+            name = "test",
+            item = {"abc", "def", "ghi", "jkl"},
+            selected_idx = 2,
+            index_event = true,
+        },
+    }))
+)
+
 -- Ensure the style[] unparse compatibility works correctly
 assert_equal(
     'style_type[test;abc=def]',
@@ -364,5 +522,10 @@ assert_equal(
 
 -- Ensure invsize[] is converted to size[]
 assert_equal(assert(formspec_ast.interpret('invsize[12,34]')), 'size[12,34]')
+
+assert_equal(assert(formspec_ast.interpret('label[1,2;abc\\')),
+    'label[1,2;abc]')
+assert_equal(assert(formspec_ast.interpret('label[1,2;abc\\\\')),
+    'label[1,2;abc\\\\]')
 
 print('Tests pass')

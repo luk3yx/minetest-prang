@@ -8,8 +8,6 @@ A Minetest mod library to make modifying formspecs easier.
     an AST.
  - `formspec_ast.unparse(tree)`: Unparses the abstract syntax tree provided
     and returns a formspec string.
- - `formspec_ast.register_element('modname:element', function())`: Registers
-    a custom element. This function may be removed in a future release.
  - `formspec_ast.interpret(string_or_tree)`: Returns a formspec string after
     (optionally parsing) and unparsing the formspec provided.
  - `formspec_ast.walk(tree)`: Returns an iterator (use this directly in a for
@@ -46,6 +44,13 @@ all attributes are lowercase.
 
 While I try to reduce backwards incompatibilities, sometimes they are necessary
 to either fix bugs in formspec_ast or for implementing new formspec features.
+
+#### February 2022
+
+ - The value of scrollbars is now a number instead of a string.
+ - The `item`, `listelem`, and `caption` fields are now `items`, `listelems`,
+   and `captions`. The old names still work when unparsing formspecs for now
+   but are no longer used when parsing formspecs.
 
 #### March 2021
 

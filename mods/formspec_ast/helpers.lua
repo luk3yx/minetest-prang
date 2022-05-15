@@ -153,11 +153,19 @@ function formspec_ast.show_formspec(player, formname, formspec)
     end
 end
 
--- The following elements are examples and may be removed from formspec_ast.
+-- Alias invsize[] to size[]
+formspec_ast.register_element('invsize', function(raw, parse)
+    return {
+        type = 'size',
+        w = parse.number(raw[1][1]),
+        h = parse.number(raw[1][2]),
+    }
+end)
 
 -- Centered labels
 -- Credit to https://github.com/v-rob/minetest_formspec_game for the click
 -- animation workaround.
+-- This may be removed from a later formspec_ast release.
 -- size[5,2]formspec_ast:centered_label[0,0;5,1;Centered label]
 formspec_ast.register_element('formspec_ast:centered_label', function(raw,
         parse)
@@ -211,13 +219,5 @@ formspec_ast.register_element('formspec_ast:crash', function(_, _)
         y = 0,
         w = 0,
         h = 0,
-    }
-end)
-
-formspec_ast.register_element('invsize', function(raw, parse)
-    return {
-        type = 'size',
-        w = parse.number(raw[1][1]),
-        h = parse.number(raw[1][2]),
     }
 end)

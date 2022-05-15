@@ -16,12 +16,12 @@ def _make_known(**kwargs):
 _known = _make_known(
     number=('x', 'y', 'w', 'h', 'selected_idx', 'version',
             'starting_item_index', 'scroll_factor', 'frame_count',
-            'frame_duration', 'frame_start', 'animation_speed'),
+            'frame_duration', 'frame_start', 'animation_speed', 'value'),
     boolean=('auto_clip', 'fixed_size', 'transparent', 'draw_border', 'bool',
              'noclip', 'drawborder', 'selected', 'force', 'close_on_enter',
              'continuous', 'mouse_control', 'index_event'),
     fullscreen=('fullscreen',),
-    table=('param', 'opt', 'prop'),
+    table=('params', 'opts', 'props'),
     null=('',),
 )
 
@@ -69,7 +69,7 @@ def _fix_param(param):
         else:
             while res and _get_name(res[-1]) == name:
                 res.pop()
-            res.append((_fix_param(name), '...'))
+            res.append((_fix_param(name + 's'), '...'))
         break
 
     return res
@@ -169,6 +169,23 @@ def _model_hook(params):
     # Add optional parameters
     for i in range(5, len(params) + 1):
         yield params[:i]
+
+# Parse image_button/image_button_exit like the source code does
+# image_button_exit[] can have the extra parameters as well and
+# pressed_texture_name is optional if noclip and drawborder are specified.
+@hook('image_button')
+@hook('image_button_exit')
+def _image_button_hook(params):
+    if len(params) != 5:
+        assert len(params) == 8
+        return
+
+    yield params
+    params.append(('noclip', 'boolean'))
+    params.append(('drawborder', 'boolean'))
+    yield params
+    params.append(('pressed_texture_name', 'string'))
+    yield params
 
 _param_re = re.compile(r'^\* `([^`]+)`(?: and `([^`]+)`)?:? ')
 def _raw_parse(data):
