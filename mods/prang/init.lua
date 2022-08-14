@@ -4,6 +4,12 @@
 -- Copyright 2021 by luk3yx
 --
 
+local DEFAULT_ZOOM = 0.7
+if (PLATFORM == "Android" or PLATFORM == "iOS") and
+        minetest.is_singleplayer() then
+    DEFAULT_ZOOM = 0.4
+end
+
 local running_games = {}
 
 local function dummy_func() end
@@ -86,7 +92,7 @@ minetest.register_on_joinplayer(function(player)
 
     local pname = player:get_player_name()
     hide_sky(player, pname)
-    set_game_zoom(pname, 0.7)
+    set_game_zoom(pname, DEFAULT_ZOOM)
     running_games[pname] = TitleScreen(player)
 end)
 
@@ -1023,7 +1029,7 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
     elseif fields.zoom_out then
         set_game_zoom(pname, max(zoom_levels[pname] - 0.05, 0.2))
     elseif fields.reset_zoom then
-        set_game_zoom(pname, 0.7)
+        set_game_zoom(pname, DEFAULT_ZOOM)
     elseif fields.toggle_sky then
         -- Disable clouds etc to save FPS
         if player:get_clouds().density == 0 then
