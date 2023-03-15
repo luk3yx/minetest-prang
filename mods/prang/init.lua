@@ -5,7 +5,8 @@
 --
 
 local DEFAULT_ZOOM = 0.7
-if (PLATFORM == "Android" or PLATFORM == "iOS") and
+if minetest.global_exists("PLATFORM") and
+        (PLATFORM == "Android" or PLATFORM == "iOS") and
         minetest.is_singleplayer() then
     DEFAULT_ZOOM = 0.4
 end
@@ -250,6 +251,7 @@ end
 local game_size_elem = {type = 'size', w = 1920, h = 1080}
 local game_box_elem = {type = 'box', x = 0, y = 0, w = 1920, h = 1080,
                        color = 'black'}
+local game_padding_elem = {type = 'padding', x = 0.01, y = 0.01}
 
 local sqrt_2 = math.sqrt(2)
 function Game:tick(dtime)
@@ -258,10 +260,10 @@ function Game:tick(dtime)
 
     self.time = self.time + dtime
 
+    local padding = 1 - zoom_levels[self.name] / DEFAULT_ZOOM
     local fs = {
-        game_size_elem, game_box_elem,
-        {type = 'label', x = 0, y = -10,
-            label = 'FPS: ' .. math.floor(1 / dtime)}
+        game_size_elem, {type = 'padding', x = padding, y = padding},
+        game_box_elem,
     }
 
     if not self.title_screen then

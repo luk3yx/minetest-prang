@@ -32,6 +32,10 @@ The following elements are supported:
     - **You need to use these to set the position of the HUD!**
     - See [the Minetest API documentation](https://minetest.gitlab.io/minetest/formspec/#positionxy) for more info.
     - You probably want `anchor` to have the same value as `position`.
+ - `padding`
+    - When set, hud_fs attempts to calculate the form size in the same way that
+      the client does.
+    - Use `padding[0.05,0.05]` to make the HUD use roughly the same scaling as formspecs.
  - `container`
  - `label`
     - Because of HUD limitations, `minetest.colorize()` only works at the start
@@ -79,6 +83,8 @@ hud_fs.show_hud(player, "waypoints", {
       default (64, subject to change).
     - The scale is the amount of pixels per co-ordinate. For example, a 1x1
       image will have a size of 10x10 pixels if the scale is set to 10.
+    - This is ignored on MT 5.7.0+ clients if a `padding[]` element exists in
+      the formspec.
  - `hud_fs.set_z_index(formname, z_index)`: Sets the base Z-Index of the HUD.
     - All future HUDs shown with `formname` will use this z-index instead of
       the default (0).
@@ -108,12 +114,11 @@ rejected in https://github.com/minetest/minetest/issues/10135.
 
 #### But I hate formspecs and don't want to touch them
 
-Then don't use this mod. There are plenty of other HUD library mods around such
+The API provided by this mod accepts a list of HUD elements in place of a
+formspec. Alternatively, there are other HUD library mods around such
 as [hudlib](https://github.com/octacian/hudlib) and
 [panel_lib](https://gitlab.com/zughy-friends-minetest/panel_lib).
 
-Alternatively, the API provided by this mod accepts a list of HUD elements in
-place of a formspec.
 
 ## Performance
 

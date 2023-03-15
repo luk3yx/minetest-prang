@@ -12,7 +12,8 @@ local DEBUG = false
 local DEFAULT_SCALE = 64
 local DEFAULT_Z_INDEX = 0
 
-local floor, type, pairs, max = math.floor, type, pairs, math.max
+local floor, type, pairs = math.floor, type, pairs
+local max, min = math.max, math.min
 
 -- Attempt to use modlib's parser
 local colorstring_to_number
@@ -73,9 +74,10 @@ function nodes.label(node, scale)
     return elem
 end
 
-function nodes.image(node, scale, _, possibly_using_gles)
-    local w = floor(node.w * scale)
-    local h = floor(node.h * scale)
+function nodes.image(node, scale, _, possibly_using_gles, client_hud_scale)
+    -- The provided texture could be any size so this has to scale it first
+    local w = floor(node.w * scale * client_hud_scale)
+    local h = floor(node.h * scale * client_hud_scale)
 
     local texture = node.texture_name
     if w > 0 and h > 0 and texture ~= "" then
@@ -104,12 +106,12 @@ function nodes.image(node, scale, _, possibly_using_gles)
         hud_elem_type = "image",
         text = texture,
         alignment = {x = 1, y = 1},
-        scale = {x = 1, y = 1},
+        scale = {x = 1 / client_hud_scale, y = 1 / client_hud_scale},
     }
 end
 
 -- Hack box[] into image[]
-function nodes.box(node, scale, add_node, possibly_using_gles)
+function nodes.box(node, scale)
     local col = node.color
     -- Add default transparency
     if col:byte(1) == 35 then
@@ -119,8 +121,14 @@ function nodes.box(node, scale, add_node, possibly_using_gles)
             col = col .. "8C"
         end
     end
-    node.texture_name = 'hud_fs_box.png^[colorize:' .. col
-    return nodes.image(node, scale, add_node, possibly_using_gles)
+
+    -- Since hud_fs_box.png is guaranteed to be 1x1, scale can be used directly
+    return {
+        hud_elem_type = "image",
+        text = 'hud_fs_box.png^[colorize:' .. col,
+        alignment = {x = 1, y = 1},
+        scale = {x = node.w * scale, y = node.h * scale},
+    }
 end
 
 function nodes.textarea(node, scale, add_node)
@@ -168,7 +176,7 @@ local function get_tile_image(tiles, preferred_texture)
     return tile
 end
 
-function nodes.item_image(node, scale, add_node, possibly_using_gles)
+function nodes.item_image(node, ...)
     local def = minetest.registered_items[node.item_name]
     if not def then
         node.texture_name = "unknown_item.png"
@@ -185,7 +193,7 @@ function nodes.item_image(node, scale, add_node, possibly_using_gles)
     else
         node.texture_name = "unknown_node.png"
     end
-    return nodes.image(node, scale, add_node, possibly_using_gles)
+    return nodes.image(node, ...)
 end
 
 function nodes.button(node, _, add_node)
@@ -224,7 +232,7 @@ local function render_error(err)
     return {}
 end
 
-local function render(tree, possibly_using_gles, scale, z_index)
+local function render(tree, possibly_using_gles, scale, z_index, window)
     if type(tree) == "string" then
         local err
         tree, err = formspec_ast.parse(tree)
@@ -245,11 +253,11 @@ local function render(tree, possibly_using_gles, scale, z_index)
     scale = scale or DEFAULT_SCALE
     z_index = z_index or DEFAULT_Z_INDEX
 
+    local client_hud_scale = window and window.real_hud_scaling or 1
     local function add_node(node_type, node)
         local elem = nodes[node_type](node, scale, add_node,
-            possibly_using_gles)
+            possibly_using_gles, client_hud_scale)
         elem.position = pos
-        elem.name = node_type
         elem.z_index = z_index
         elem.offset = {
             x = (node.x + offset_x) * scale,
@@ -272,6 +280,24 @@ local function render(tree, possibly_using_gles, scale, z_index)
             end
             offset_x = -node.x * size_w
             offset_y = -node.y * size_h
+        elseif node_type == "padding" and window then
+            if size_w == 0 or size_h == 0 then
+                return render_error("padding[] without size[]")
+            elseif #hud_elems > 0 then
+                return render_error("padding[] after other elements")
+            end
+
+            -- If padding[] is present, override the specified scale on new
+            -- clients
+            scale = min(
+                -- The client's size
+                window.size.x / (window.max_formspec_size.x * 1.1),
+                window.size.y / (window.max_formspec_size.y * 1.1),
+
+                -- Maximum size based on the padding
+                window.size.x * (1 - node.x * 2) / size_w,
+                window.size.y * (1 - node.y * 2) / size_h
+            ) / client_hud_scale
         elseif nodes[node_type] then
             add_node(node_type, node)
         elseif node_type == nil and node.hud_elem_type then
@@ -367,8 +393,10 @@ function hud_fs.show_hud(player, formname, formspec)
         info.platform == "iOS")
 
     local ids, elems = data[1], data[2]
+    local window = minetest.get_player_window_information and
+        minetest.get_player_window_information(name)
     local new_elems = render(formspec, possibly_using_gles, scales[formname],
-        z_indexes[formname])
+        z_indexes[formname], window)
 
     -- Z-index was added to MT 5.2.0 (protocol version 39) and is ignored by
     -- older clients. Because of the way HUDs work, sometimes it's safest to
