@@ -251,7 +251,6 @@ end
 local game_size_elem = {type = 'size', w = 1920, h = 1080}
 local game_box_elem = {type = 'box', x = 0, y = 0, w = 1920, h = 1080,
                        color = 'black'}
-local game_padding_elem = {type = 'padding', x = 0.01, y = 0.01}
 
 local sqrt_2 = math.sqrt(2)
 function Game:tick(dtime)
@@ -980,8 +979,10 @@ end
 local function show_instructions_credits(player, pname, formname, img)
     -- Freeze the demo (but keep the music)
     running_games[pname].running = false
+    local padding = 1 - zoom_levels[pname] / DEFAULT_ZOOM
     hud_fs.show_hud(pname, "prang:game_" .. pname, {
         game_size_elem,
+        {type = "padding", x = padding, y = padding},
         game_box_elem,
         {type = "image", x = 0, y = 0, w = 1920, h = 1080, texture_name = img},
         {type = "image", x = 541.5, y = 24, w = 837, h = 152,
