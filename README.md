@@ -16,10 +16,8 @@ powerup.
 Requires 5.4.0+ servers, however it should work with clients down to 5.0.0
 (although it will send more HUD updates to clients older than 5.2.0).
 
-If you don't see a "FPS" counter at the top-left corner of the game, you may
-need to zoom out to be able to see the entire game. Minetest doesn't provide an
-API to get the window resolution from clients so an automatic zoom feature
-isn't possible at the moment.
+On MT 5.6.0 and older, you may need to zoom out to be able to see the entire
+game on smaller displays.
 
 ## Download
 
