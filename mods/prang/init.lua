@@ -63,7 +63,7 @@ local function hide_sky(player, pname)
 
     -- The background is 105% to cover any one pixel gaps
     hud_fs.show_hud(player, "prang:bg", {{
-        hud_elem_type = "image",
+        type = "image",
         position = {x = 0.5, y = 0.5},
         scale = {x = -105, y = -105},
         text = "hud_fs_box.png^[colorize:#000",

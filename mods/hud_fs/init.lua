@@ -14,6 +14,7 @@ local DEFAULT_Z_INDEX = 0
 
 local floor, type, pairs = math.floor, type, pairs
 local max, min = math.max, math.min
+local legacy_type_field = not minetest.features.hud_def_type_field
 
 -- Attempt to use modlib's parser
 local colorstring_to_number
@@ -32,7 +33,7 @@ end
 hud_fs.colorstring_to_number = colorstring_to_number
 
 -- Hacks to allow colorize() to work to some extent on labels
-local function get_label_number(label)
+local function get_label_number(label, style)
     local number, text = label:match("^\027%(c@([^%)]+)%)(.*)$")
 
     -- Remove trailing escape sequence added by minetest.colorize().
@@ -40,7 +41,8 @@ local function get_label_number(label)
         text = text:gsub("\027%(c@[^%)]+%)$", "")
     end
 
-    return text or label, number and colorstring_to_number(number) or 0xFFFFFF
+    return text or label, number and colorstring_to_number(number) or
+        (style.textcolor and colorstring_to_number(style.textcolor) or 0xFFFFFF)
 end
 
 -- Disable the race condition workaround in 5.4.1 singleplayer
@@ -55,14 +57,78 @@ if minetest.is_singleplayer() then
     end
 end
 
+local PLUS, TIMES = ("+*"):byte(1, 2)
+local function get_font_size(style)
+    local size = style.font_size
+    if not size then return end
+
+    local first_char = size:byte(1)
+    if first_char == TIMES then
+        size = tonumber(size:sub(2))
+    else
+        -- Approximate a multiple size based on the font size
+        if first_char == PLUS then
+            size = tonumber(size:sub(2))
+            if size then
+                size = size + 16
+            end
+        else
+            size = tonumber(size)
+        end
+
+        if size then
+            size = size / 16
+        end
+    end
+
+    return size and {x = size, y = 0}
+end
+
+local empty_table = {}
+local function get_style(node, styles_by_name, styles_by_type)
+    local style = styles_by_name[node.name]
+    if not style then
+        return styles_by_type[node.type] or empty_table
+    end
+
+    return setmetatable(style, {__index = styles_by_type[node.type]})
+end
+
+local function style_is_yes(value, default)
+    if value == nil then
+        return default
+    elseif type(value) == "string" then
+        return minetest.is_yes(value)
+    else
+        return value
+    end
+end
+
+local font_style_flags = {"bold", "italic", "mono"}
+local function get_style_flags(style)
+    local flags = 0
+    if style.font then
+        local options = style.font:split(",")
+        for i, flag in ipairs(font_style_flags) do
+            if table.indexof(options, flag) > 0 then
+                flags = flags + 2 ^ (i - 1)
+            end
+        end
+    end
+    return flags
+end
+
 local nodes = {}
-function nodes.label(node, scale)
-    local text, number = get_label_number(node.label)
+function nodes.label(node, scale, _, _, _, _, styles_by_type)
+    local style = styles_by_type.label or empty_table
+    local text, number = get_label_number(node.label, style)
     local elem = {
-        hud_elem_type = "text",
+        type = "text",
         text = text,
         alignment = {x = 1, y = 0},
-        number = number
+        number = number,
+        size = get_font_size(style),
+        style = get_style_flags(style),
     }
 
     -- Hack for newlines. This will unfortunately break if the font size is
@@ -74,6 +140,7 @@ function nodes.label(node, scale)
     return elem
 end
 
+local log2_div = math.log(2)
 function nodes.image(node, scale, _, possibly_using_gles, client_hud_scale)
     -- The provided texture could be any size so this has to scale it first
     local w = floor(node.w * scale * client_hud_scale)
@@ -92,8 +159,8 @@ function nodes.image(node, scale, _, possibly_using_gles, client_hud_scale)
     -- Hacks to work around textures being aligned to a power of 2 on some
     -- video drivers
     if possibly_using_gles then
-        local true_w = 2 ^ math.ceil(math.log(w, 2))
-        local true_h = 2 ^ math.ceil(math.log(h, 2))
+        local true_w = 2 ^ math.ceil(math.log(w) / log2_div)
+        local true_h = 2 ^ math.ceil(math.log(h) / log2_div)
         if true_w ~= w or true_h ~= h then
             texture = ("[combine:%sx%s:0,0=%s"):format(
                 true_w, true_h,
@@ -103,7 +170,7 @@ function nodes.image(node, scale, _, possibly_using_gles, client_hud_scale)
     end
 
     return {
-        hud_elem_type = "image",
+        type = "image",
         text = texture,
         alignment = {x = 1, y = 1},
         scale = {x = 1 / client_hud_scale, y = 1 / client_hud_scale},
@@ -124,14 +191,15 @@ function nodes.box(node, scale)
 
     -- Since hud_fs_box.png is guaranteed to be 1x1, scale can be used directly
     return {
-        hud_elem_type = "image",
+        type = "image",
         text = 'hud_fs_box.png^[colorize:' .. col,
         alignment = {x = 1, y = 1},
         scale = {x = node.w * scale, y = node.h * scale},
     }
 end
 
-function nodes.textarea(node, scale, add_node)
+function nodes.textarea(node, scale, add_node, _, _, styles_by_name,
+        styles_by_type)
     -- Add in separate nodes for the label and background
     if node.label and node.label ~= "" then
         add_node("label", {
@@ -140,7 +208,9 @@ function nodes.textarea(node, scale, add_node)
             label = node.label
         })
     end
-    if node.name and node.name ~= "" then
+
+    local style = get_style(node, styles_by_name, styles_by_type)
+    if node.name and node.name ~= "" and style_is_yes(style.border, true) then
         add_node("box", {
             x = node.x,
             y = node.y,
@@ -157,11 +227,13 @@ function nodes.textarea(node, scale, add_node)
         lines[i] = minetest.wrap_text(line, max_line_length)
     end
     return {
-        hud_elem_type = "text",
+        type = "text",
         text = table.concat(lines, "\n"),
         alignment = {x = 1, y = 1},
         number = 0xFFFFFF,
-        scale = {x = node.w * scale, y = node.h * scale}
+        scale = {x = node.w * scale, y = node.h * scale},
+        size = get_font_size(style),
+        style = get_style_flags(style),
     }
 end
 
@@ -196,9 +268,12 @@ function nodes.item_image(node, ...)
     return nodes.image(node, ...)
 end
 
-function nodes.button(node, _, add_node)
+function nodes.button(node, _, add_node, _, _, styles_by_name, styles_by_type)
+    local style = get_style(node, styles_by_name, styles_by_type)
+
     -- This function is used by image_button and item_image_button as well
-    if node.drawborder == nil or node.drawborder then
+    if node.drawborder or (node.drawborder == nil and
+            style_is_yes(style.border, true)) then
         add_node("box", {
             x = node.x,
             y = node.y,
@@ -207,6 +282,17 @@ function nodes.button(node, _, add_node)
             color = "#515151FF"
         })
     end
+
+    if style.bgimg then
+        add_node("image", {
+            x = node.x,
+            y = node.y,
+            w = node.w,
+            h = node.h,
+            texture_name = style.bgimg,
+        })
+    end
+
     if node.texture_name and node.texture_name ~= "" then
         add_node("image", node)
     elseif node.item_name and node.item_name ~= "" then
@@ -214,18 +300,27 @@ function nodes.button(node, _, add_node)
     end
     node.x = node.x + node.w / 2
     node.y = node.y + node.h / 2
-    local text, number = get_label_number(node.label)
+    local text, number = get_label_number(node.label, style)
     return {
-        hud_elem_type = "text",
+        type = "text",
         text = text,
         alignment = {x = 0, y = 0},
-        number = number
+        number = number,
+        size = get_font_size(style),
+        style = get_style_flags(style),
     }
 end
 nodes.button_exit = nodes.button
 nodes.image_button = nodes.button
 nodes.image_button_exit = nodes.button
 nodes.item_image_button = nodes.button
+
+-- Used to decide which element types to pass through as-is
+-- "image" is a special case and is not included here
+local hud_elem_types = {
+    text = true, statbar = true, inventory = true, waypoint = true,
+    image_waypoint = true, compass = true, minimap = true,
+}
 
 local function render_error(err)
     minetest.log("error", "[hud_fs] Error rendering HUD: " .. tostring(err))
@@ -253,16 +348,26 @@ local function render(tree, possibly_using_gles, scale, z_index, window)
     scale = scale or DEFAULT_SCALE
     z_index = z_index or DEFAULT_Z_INDEX
 
+    local styles_by_name = {}
+    local styles_by_type = {}
     local client_hud_scale = window and window.real_hud_scaling or 1
     local function add_node(node_type, node)
         local elem = nodes[node_type](node, scale, add_node,
-            possibly_using_gles, client_hud_scale)
+            possibly_using_gles, client_hud_scale, styles_by_name,
+            styles_by_type)
         elem.position = pos
         elem.z_index = z_index
         elem.offset = {
             x = (node.x + offset_x) * scale,
             y = (node.y + offset_y) * scale
         }
+
+        -- Convert to legacy type field
+        if legacy_type_field then
+            elem.hud_elem_type = elem.type
+            elem.type = nil
+        end
+
         hud_elems[#hud_elems + 1] = elem
         z_index = z_index + 1
     end
@@ -298,11 +403,46 @@ local function render(tree, possibly_using_gles, scale, z_index, window)
                 window.size.x * (1 - node.x * 2) / size_w,
                 window.size.y * (1 - node.y * 2) / size_h
             ) / client_hud_scale
+        elseif node_type == "style" or node_type == "style_type" then
+            local styles = node_type == "style" and styles_by_name or
+                styles_by_type
+            for _, name in ipairs(node.selectors or {node.name}) do
+                local props = styles[name]
+                if not props then
+                    props = {}
+                    styles[name] = props
+                end
+                for k, v in pairs(node.props) do
+                    if v == "" then
+                        props[k] = nil
+                    else
+                        props[k] = v
+                    end
+                end
+            end
+        elseif hud_elem_types[node_type] or (node_type == "image" and
+                node.texture_name == nil and node.text ~= nil) then
+            -- Pass through new HUD elements with type = "hud_type"
+            hud_elems[#hud_elems + 1] = node
+
+            -- Support new type field on MT 5.8 and older
+            if legacy_type_field then
+                node.hud_elem_type = node.type
+                node.type = nil
+            end
         elseif nodes[node_type] then
             add_node(node_type, node)
         elseif node_type == nil and node.hud_elem_type then
-            -- Pass through plain HUD elements
+            -- Pass through legacy HUD elements
             hud_elems[#hud_elems + 1] = node
+
+            -- Suppress deprecation warning for using "hud_elem_type", it may
+            -- still be useful for element types that hud_fs doesn't know about
+            -- yet
+            if not legacy_type_field then
+                node.type = node.hud_elem_type
+                node.hud_elem_type = nil
+            end
         end
     end
 
@@ -330,7 +470,9 @@ local function compare_elems(old_elem, new_elem)
             end
         elseif v ~= v2 then
             -- Sometimes the HUD element will need to be deleted/re-added.
-            if k == "hud_elem_type" or v2 == nil then return true, nil end
+            if k == "type" or k == "hud_elem_type" or v2 == nil then
+                return true, nil
+            end
             differences[#differences + 1] = k
         end
     end

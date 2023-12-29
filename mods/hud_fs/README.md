@@ -53,6 +53,7 @@ The following elements are supported:
     - The label has the same limitations as the `label` element.
     - The `noclip` option is ignored.
     - Item image buttons have the same limitations as `item_image`.
+ - `style`
 
 All valid formspec elements not listed above are ignored.
 
@@ -64,12 +65,12 @@ of HUD elements (the tables sent to `hud_add`) instead. Example:
 ```lua
 hud_fs.show_hud(player, "waypoints", {
     {
-        hud_elem_type = "waypoint",
+        type = "waypoint",
         world_pos = {x = 0, y = 0, z = 0},
         name = "Waypoint 1"
     },
     {
-        hud_elem_type = "waypoint",
+        type = "waypoint",
         world_pos = {x = 1, y = 2, z = 3},
         name = "Waypoint 2"
     }
