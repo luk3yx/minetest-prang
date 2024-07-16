@@ -34,7 +34,7 @@ Alternatively, you can download a .zip or clone one of the two Git repositories:
 If you don't want to download PRANG!, Edgy1 hosts a public server. Note that
 movement processing and rendering is done server-side so there may be lag
 and/or glitching if you are far away from the server (which is currently in
-Canada) or have a poor internet connection. See
+Germany) or have a poor internet connection. See
 https://edgy1.net/minetest/prang for more information.
 
 ## License
