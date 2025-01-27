@@ -586,12 +586,17 @@ function Player:tick(game, dtime, controls)
         speed = speed * (8/3)
     end
 
-    local dx = get_direction(speed, controls.left, controls.right)
-    local dy = get_direction(speed, controls.up, controls.down)
-    if dx ~= 0 and dy ~= 0 then
-        dx, dy = dx / sqrt_2, dy / sqrt_2
+    if controls.movement_x then
+        -- introduced in Luanti 5.10.0
+        self:move(controls.movement_x * speed, -controls.movement_y * speed)
+    else
+        local dx = get_direction(speed, controls.left, controls.right)
+        local dy = get_direction(speed, controls.up, controls.down)
+        if dx ~= 0 and dy ~= 0 then
+            dx, dy = dx / sqrt_2, dy / sqrt_2
+        end
+        self:move(dx, dy)
     end
-    self:move(dx, dy)
 end
 
 function Player:has_powerup()
